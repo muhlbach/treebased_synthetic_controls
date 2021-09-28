@@ -83,7 +83,7 @@ def generate_data(dgp="AR1", ar_p=1, n_controls=5, T0=500, T1=50, return_as_df=F
     T = T0 + T1
     
     # Generate data
-    if dgp=="A1":
+    if dgp=="AR1":
         
         # Number of control units (columns of X)
         x_p=5
