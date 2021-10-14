@@ -1,12 +1,4 @@
 #------------------------------------------------------------------------------
-# Debugging
-#------------------------------------------------------------------------------
-# import os
-# # Manually set path of current file
-# path_to_here = "/Users/muhlbach/Repositories/treebased_synthetic_controls/treebased_synthetic_controls/"
-# # Change path
-# os.chdir(path_to_here)
-#------------------------------------------------------------------------------
 # Libraries
 #------------------------------------------------------------------------------
 # Standard
