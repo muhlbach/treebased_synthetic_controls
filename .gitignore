@@ -2,6 +2,7 @@
 # Misc
 .pypirc
 **/.DS_Store
+simulation/
 
 __pycache__/
 *.py[cod]
