@@ -7,10 +7,13 @@ import pandas as pd
 
 # User
 
-#------------------------------------------------------------------------------
+###############################################################################
 # Main
-#------------------------------------------------------------------------------
+###############################################################################
 
+#------------------------------------------------------------------------------
+# Tools
+#------------------------------------------------------------------------------
 def get_colnames(x,prefix="X"):
     try:
         dim = x.shape[1]
@@ -38,7 +41,9 @@ def convert_to_dict_df(X=None):
     
     return args
 
-            
+#------------------------------------------------------------------------------
+# Generate X data
+#------------------------------------------------------------------------------
 def generate_ar_process(T=100, x_p=5, ar_p=3, burnin=50, **kwargs):
 
     # Extract/generate initial coeffients of X
@@ -55,19 +60,106 @@ def generate_ar_process(T=100, x_p=5, ar_p=3, burnin=50, **kwargs):
 
     # Generate errors
     errors = kwargs.get('errors', np.random.multivariate_normal(mean=np.ones(x_p), 
-                                                                        cov=np.identity(x_p), #Same np.diag(np.ones(x_p))
-                                                                        size=T))    
+                                                                cov=np.identity(x_p),
+                                                                size=T))    
+
+    # Generate errors for burn-in period
+    errors_burnin = np.random.multivariate_normal(mean=np.mean(errors,axis=0), 
+                                                  cov=np.cov(errors.T),
+                                                  size=burnin)
+
+    errors_all = np.concatenate((errors_burnin,errors))
 
     # Generate initial value(s)
     X = mu + sigma * np.random.randn(ar_p,x_p)
 
     # Simulate AR(p) with burn-in included
     for b in range(burnin+T):
-        X = np.concatenate((X, const + ar_coefs.T @ X[0:ar_p,:] + error_coef * errors[np.random.randint(errors.shape[0], size=1),:]),
+        X = np.concatenate((X,
+                            const + ar_coefs.T @ X[0:ar_p,:] + error_coef * errors_all[b,0:x_p]),
                            axis=0)
 
     # Return only the last T observations (we have removed the dependency on the initial draws)
     return X[-T:,]
+
+def generate_iid_process(T=100, x_p=5, **kwargs):
+
+    # Extract/generate initial coeffients of X
+    mu = kwargs.get('mu', 0)
+    sigma = kwargs.get('sigma', 1)
+    covariance = kwargs.get('covariance', 0)
+
+    # Construct variance-covariance matrix
+    cov_diag = np.diag(np.repeat(a=sigma**2, repeats=x_p))
+    cov_off_diag= np.ones(shape=(x_p,x_p)) * covariance
+    np.fill_diagonal(a=cov_off_diag, val=0)
+    cov_mat = cov_diag + cov_off_diag
+
+    # Generate X
+    X = np.random.multivariate_normal(mean=np.repeat(a=mu, repeats=x_p), 
+                                      cov=cov_mat,
+                                      size=T)    
+
+    return X
+
+
+#------------------------------------------------------------------------------
+# Generate f_star = E[Y|X=x]
+#------------------------------------------------------------------------------
+
+
+def generate_friedman_data_1(x, **kwargs):
+    
+    # Convert to np
+    x = np.array(x)
+    
+    # Generate fstar=E[y|X=x]
+    f_star = 0.1*np.exp(4*x[:,0]) + 4/(1+np.exp(-20*(x[:,1]-0.5))) + 3*x[:,2] + 2*x[:,3] + 1*x[:,4]
+    
+    return f_star
+
+def generate_friedman_data_2(x, **kwargs):
+    
+    # Convert to np
+    x = np.array(x)
+    
+    # Generate fstar=E[y|X=x]
+    f_star = 10*np.sin(np.pi*x[:,0]*x[:,1]) + 20*(x[:,2]-0.5)**2 + 10*x[:,3] + 5*x[:,4]
+    
+    return f_star
+
+#------------------------------------------------------------------------------
+# Simulate Y
+#------------------------------------------------------------------------------
+# HERE !!!
+def simulate_data(f, error_distribution, X_type="AR", ate=1, T0=500, T1=50, X_dim=5, AR_lags=3, **kwargs)
+
+    # Total number of time periods
+    T = T0 + T1
+
+    # Generate errors
+    errors = error_distribution(T=T, p=X_dim, mean=0, variance=1, covariance=0)
+
+    # Generate covariates
+    if X_type=="AR":
+        X = generate_ar_process(T=T,
+                            x_p=X_dim,
+                            ar_p=AR_lags,
+                            errors=errors)
+                
+    elif X_type=="iid":
+        X = generate_iid_process(T=T,x_p=X_dim)
+    
+    # Generate W
+    W = np.repeat((0,1), (T0,T1))
+
+    # Generate Y
+    Y = f(x=X) + ate*W + errors[:,-1]
+
+
+
+
+
 
 
 def generate_data(dgp="AR1", ar_p=1, n_controls=5, T0=500, T1=50, return_as_df=False, **kwargs):
