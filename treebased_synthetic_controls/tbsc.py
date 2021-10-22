@@ -73,7 +73,7 @@ class SyntheticControl(object):
         # Compute number of models
         self.n_models = np.prod(np.array([len(v) for k,v in self.param_grid.items()]))
 
-        # Define splitter
+        # Define data splitter, which depends on the number of folds.
         if self.n_folds==1:
             self.splitter = SingleSplit(test_size=self.test_size)
             
@@ -91,48 +91,55 @@ class SyntheticControl(object):
                                       provided_input=self.n_folds,
                                       allowed_inputs=self.N_FOLDS_ALLOWED)
             
+            
+        # Define the estimator to be cross-validated
         if self.n_models>1:
 
             check_param_grid(self.param_grid)
             
             if self.n_models>self.max_n_models:
-                self.estimator_cv = RandomizedSearchCV(estimator=self.estimator,
-                                                       param_distributions=self.param_grid,
-                                                       cv=self.splitter,
-                                                       n_iter=self.max_n_models)
+                self.estimator_cv=RandomizedSearchCV(estimator=self.estimator,
+                                                     param_distributions=self.param_grid,
+                                                     cv=self.splitter,
+                                                     n_iter=self.max_n_models)
             else:
                 self.estimator_cv=GridSearchCV(estimator=self.estimator,
                                                param_grid=self.param_grid,
                                                cv=self.splitter)
         
         else:
+            # If param_grid leads to one single model (n_models==1), there's no need to set of cross validation. In this case, just initialize the model and set parameters
             self.estimator_cv = self.estimator
             self.param_grid = {k: self.param_grid.get(k,None)[0] for k in self.param_grid.keys()}
-            # TODO: Fix this
-        #     self.estimator_cv.set_param_grid(**self.param_grid)
-        
-        ## Legacy
-        # # Get default meta parameters
-        #     default_cv_params = {k: self.estimator_cv.get_params().get(k,None) for k in self.estimator_cv.get_params().keys() if not any(x in k for x in self.DEFAULT_META_PARAMS_NOT_TUNABLE)}
-                        
-        #     # Update meta parameters by merging default and user-supplied parameters
-        #     self.updated_cv_params = update_parameters(default_params=default_cv_params,
-        #                                                user_params=self.cv_params,
-        #                                                element_as_list=False)
-    
-        #     self.estimator_cv.set_param_grid(**self.updated_meta_param_grid)
-        
-
+            
+            # Set parameters
+            self.estimator_cv.set_params(**self.param_grid)
+            
     # --------------------
     # Class variables
     # --------------------
-    DEFAULT_META_PARAMS_NOT_TUNABLE = ["estimator__", "param_grid", "estimator"]
     FOLD_TYPE_ALLOWED = ["KFold", "TimeSeriesSplit"]
     N_FOLDS_ALLOWED = [1, 2, "...", "N"]
 
     # --------------------
     # Private functions
     # --------------------
+    def _update_params(self, old_param, new_param, errors="raise"):
+        """ Update 'old_param' with 'new_param'
+        """
+        # Copy old param
+        updated_param = old_param.copy()
+        
+        for k,v in new_param.items():
+            if k in old_param:
+                updated_param[k] = v
+            else:
+                if errors=="raise":
+                    raise Exception(f"Parameters {k} not recognized as a default parameter for this estimator")
+                else:
+                    pass
+        return updated_param
+
 
     # --------------------
     # Public functions
@@ -161,10 +168,16 @@ class SyntheticControl(object):
         self.Y_post_mean = self.Y_post.mean()
         self.Y_post_hat_mean = self.Y_post_hat.mean()
         
+        # Compute average treatment effect
+        self.average_treatment_effet = self.Y_post_mean - self.Y_post_hat_mean
+        
+        
     def calculate_average_treatment_effect(self, X_post_treatment=None):
         
         if X_post_treatment is None:
-            Y_post_hat_mean = self.Y_post_hat_mean
+            # Recall ate from fit
+            average_treatment_effect = self.average_treatment_effet
+            
         else:
             # Predict Y0 post-treatment
             Y_post_hat = self.estimator_cv.predict(X=X_post_treatment)
@@ -172,10 +185,10 @@ class SyntheticControl(object):
             # Average
             Y_post_hat_mean = Y_post_hat.mean()
             
-        # Estimated treatment effect as the difference between means of Y1 and Y0-predicted
-        tau_ave = self.Y_post_mean - Y_post_hat_mean
-        
-        return tau_ave
+            # Estimated treatment effect as the difference between means of Y1 and Y0-predicted
+            average_treatment_effect = self.Y_post_mean - Y_post_hat_mean
+                
+        return average_treatment_effect
             
     def bootstrap_ate(self, bootstrap_type="circular", n_bootstrap_samples=1000, block_length=5, conf_int=0.95, X_post_treatment=None):
         
@@ -187,7 +200,7 @@ class SyntheticControl(object):
                         
         # Difference between Y1 and Y0-predicted
         Y_diff = self.Y_post - Y_post_hat
-                
+        
         # Initialize Bootstrap
         bootstrap = Bootstrap(bootstrap_type=bootstrap_type,
                               n_bootstrap_samples=n_bootstrap_samples,
@@ -196,8 +209,10 @@ class SyntheticControl(object):
         # Generate bootstrap samples
         Y_diff_bootstrapped = bootstrap.generate_samples(x=Y_diff)
                 
-        # Compute mean, std, se
+        # Compute mean
         Y_diff_bootstrapped_mean = Y_diff_bootstrapped.mean(axis=0)
+        
+        # Compute other stats from bootstrap (NOT CURRENTLY USED)
         # Y_diff_bootstrapped_std = Y_diff_bootstrapped.std(axis=0)
         # Y_diff_bootstrapped_sem = Y_diff_bootstrapped.sem(axis=0)
         
@@ -205,11 +220,11 @@ class SyntheticControl(object):
         alpha = (1-conf_int)/2
         Y_diff_bootstrapped_ci = Y_diff_bootstrapped_mean.quantile(q=[alpha,1-alpha])
         
-        Y_diff_bootstrapped_ci.iloc[0]
-        
         results_bootstrapped = {"mean" : Y_diff_bootstrapped_mean.mean(),
                                 "ci_lower" : Y_diff_bootstrapped_ci.iloc[0],
                                 "ci_upper" : Y_diff_bootstrapped_ci.iloc[1],
+                                "mean_distribution" : Y_diff_bootstrapped_mean,
+                                "difference_simulated" : Y_diff_bootstrapped,
                                 }
 
         return results_bootstrapped
