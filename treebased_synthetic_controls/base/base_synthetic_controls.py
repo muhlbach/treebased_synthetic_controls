@@ -2,9 +2,9 @@
 # Libraries
 #------------------------------------------------------------------------------
 # Standard
+from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, KFold, TimeSeriesSplit
 
 # User
@@ -14,35 +14,18 @@ from utils.exceptions import WrongInputException
 from utils.bootstrap import Bootstrap
 
 #------------------------------------------------------------------------------
-# Synthetic Control Group Method
+# Base Synthetic Control Group Method
 #------------------------------------------------------------------------------
-class SyntheticControl(object):
+class BaseSyntheticControl(object):
     """
-    This class estimates the average treatment effects by constructing a synthetic control group.
-    The construction of the synthetic control group is governed by the supplied regressor and it could be any regressor
+    This base class estimates the average treatment effects by constructing a synthetic control group.
     """
     # --------------------
     # Constructor function
     # --------------------
     def __init__(self,
-                 estimator=RandomForestRegressor(criterion='mse',
-                                                 min_weight_fraction_leaf=0.0,
-                                                 min_impurity_decrease=0.0,
-                                                 bootstrap=False,
-                                                 oob_score=False,
-                                                 n_jobs=None,
-                                                 random_state=None,
-                                                 verbose=0,
-                                                 warm_start=False,
-                                                 ccp_alpha=0.0,
-                                                 max_samples=None),
-                 param_grid={'n_estimators': 500,
-                             'max_depth': [2,4,8,16,None],
-                             'min_samples_split': [2,4,8,16],
-                             'min_samples_leaf': [1,2,4,8],
-                             'max_features': [1/4,1/3,1/2,2/3, 'sqrt','log2'],
-                             'max_leaf_nodes': None,
-                             },
+                 estimator,
+                 param_grid,
                  cv_params={'scoring':None,
                             'n_jobs':None,
                             'refit':True,

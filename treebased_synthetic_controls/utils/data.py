@@ -4,7 +4,8 @@
 # Standard
 import numpy as np
 import pandas as pd
-
+from sklearn.preprocessing import PolynomialFeatures
+from statsmodels.tools.tools import add_constant
 # User
 
 ###############################################################################
@@ -102,50 +103,126 @@ def generate_iid_process(T=100, x_p=5, **kwargs):
 
     return X
 
+def generate_errors(N=1000, p=5, mu=0, sigma=1, cov_X=0.25, cov_y=0.5):
+
+    # Number of dimensions including y
+    n_dim = p+1
+
+    ## Construct variance-covariance matrix
+    # Construct diagonal with variance = sigma^2
+    cov_diag = np.diag(np.repeat(a=sigma**2, repeats=n_dim))
+    
+    ## Construct off-diagonal with covariances
+    # Fill out for X (and y)
+    cov_off_diag = np.ones(shape=(n_dim,n_dim)) * cov_X
+    
+    # Update y entries
+    cov_off_diag[p,:] = cov_off_diag[:,p] = cov_y
+    
+    # Set diagonal to zero
+    np.fill_diagonal(a=cov_off_diag, val=0)
+    
+    # Update final variance-covariance matrix
+    cov_mat = cov_diag + cov_off_diag
+
+    # Generate epsilon
+    eps = np.random.multivariate_normal(mean=np.repeat(a=mu, repeats=n_dim), 
+                                        cov=cov_mat,
+                                        size=N)    
+
+    return eps
 
 #------------------------------------------------------------------------------
 # Generate f_star = E[Y|X=x]
 #------------------------------------------------------------------------------
+def generate_linear_data(x, beta=1, include_intercept=True, expand=True, degree=2, interaction_only=True, **kwargs):
 
+    # Convert to np and break link
+    x = np.array(x.copy())    
+
+    if expand:
+        
+        # Instantiate 
+        polynomialfeatures = PolynomialFeatures(degree=degree, interaction_only=interaction_only, include_bias=False, order='C')
+    
+        # Expand x
+        x = polynomialfeatures.fit_transform(x)
+    
+    if include_intercept:
+        x = add_constant(data=x, prepend=True, has_constant='skip')
+    
+    if isinstance(beta, int) or isinstance(beta, float):
+        beta = np.repeat(a=beta, repeats=x.shape[1])
+    
+    # Make sure beta has the right dimensions
+    beta = beta.reshape(-1,1)
+    
+    if x.shape[1]!=beta.shape[0]:
+        raise Exception(f"Beta is {beta.shape}-dim vector, but X is {x.shape}-dim matrix")
+
+    # Generate fstar=E[y|X=x]
+    f_star = x @ beta
+    
+    # Reshape for conformity
+    f_star = f_star.reshape(-1,)
+    
+    return f_star
+    
 
 def generate_friedman_data_1(x, **kwargs):
     
-    # Convert to np
-    x = np.array(x)
-    
+    # Convert to np and break link
+    x = np.array(x.copy())    
+
     # Generate fstar=E[y|X=x]
     f_star = 0.1*np.exp(4*x[:,0]) + 4/(1+np.exp(-20*(x[:,1]-0.5))) + 3*x[:,2] + 2*x[:,3] + 1*x[:,4]
+    
+    # Reshape for conformity
+    f_star = f_star.reshape(-1,)
     
     return f_star
 
 def generate_friedman_data_2(x, **kwargs):
     
-    # Convert to np
-    x = np.array(x)
-    
+    # Convert to np and break link
+    x = np.array(x.copy())    
+
     # Generate fstar=E[y|X=x]
     f_star = 10*np.sin(np.pi*x[:,0]*x[:,1]) + 20*(x[:,2]-0.5)**2 + 10*x[:,3] + 5*x[:,4]
+    
+    # Reshape for conformity
+    f_star = f_star.reshape(-1,)
     
     return f_star
 
 #------------------------------------------------------------------------------
-# Simulate Y
+# Simulate data
 #------------------------------------------------------------------------------
-# HERE !!!
-def simulate_data(f, error_distribution, X_type="AR", ate=1, T0=500, T1=50, X_dim=5, AR_lags=3, **kwargs)
+def simulate_data(f,
+                  T0=500,
+                  T1=50,
+                  X_type="AR",
+                  X_dim=5,
+                  AR_lags=3,
+                  ate=1,
+                  eps_mean=0,
+                  eps_std=1,
+                  eps_cov_x=0,
+                  eps_cov_y=0,
+                  **kwargs):
 
     # Total number of time periods
     T = T0 + T1
 
     # Generate errors
-    errors = error_distribution(T=T, p=X_dim, mean=0, variance=1, covariance=0)
-
+    errors = generate_errors(N=T, p=X_dim, mu=eps_mean, sigma=eps_std, cov_X=eps_cov_x, cov_y=eps_cov_y)
+    
     # Generate covariates
     if X_type=="AR":
         X = generate_ar_process(T=T,
-                            x_p=X_dim,
-                            ar_p=AR_lags,
-                            errors=errors)
+                                x_p=X_dim,
+                                ar_p=AR_lags,
+                                errors=errors)
                 
     elif X_type=="iid":
         X = generate_iid_process(T=T,x_p=X_dim)
@@ -154,13 +231,19 @@ def simulate_data(f, error_distribution, X_type="AR", ate=1, T0=500, T1=50, X_di
     W = np.repeat((0,1), (T0,T1))
 
     # Generate Y
-    Y = f(x=X) + ate*W + errors[:,-1]
+    Y = f(x=X, **kwargs) + ate*W + errors[:,-1]
 
+    # df = {"Y":Y,
+    #       "W":W,
+    #       "X":X}
 
-
-
-
-
+    # Collect data
+    df = pd.concat(objs=[pd.Series(data=Y,name="Y"),
+                          pd.Series(data=W,name="W"),
+                          pd.DataFrame(data=X,columns=[f"X{d}" for d in range(X.shape[1])])],
+                    axis=1)
+        
+    return df
 
 def generate_data(dgp="AR1", ar_p=1, n_controls=5, T0=500, T1=50, return_as_df=False, **kwargs):
     
