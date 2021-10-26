@@ -10,7 +10,7 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.metrics import r2_score
 
 # User
-from utils.exceptions import WrongInputException
+from ..utils.exceptions import WrongInputException
 
 # Read about score function here:
 # https://kiwidamien.github.io/custom-loss-vs-custom-scoring.html

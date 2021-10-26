@@ -8,10 +8,10 @@ import pandas as pd
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, KFold, TimeSeriesSplit
 
 # User
-from utils.sanity_check import check_param_grid, check_X_Y, check_X
-from utils.tools import SingleSplit
-from utils.exceptions import WrongInputException
-from utils.bootstrap import Bootstrap
+from ..utils.sanity_check import check_param_grid, check_X_Y, check_X
+from ..utils.tools import SingleSplit
+from ..utils.exceptions import WrongInputException
+from ..utils.bootstrap import Bootstrap
 
 #------------------------------------------------------------------------------
 # Base Synthetic Control Group Method

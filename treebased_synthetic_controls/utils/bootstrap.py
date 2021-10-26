@@ -7,8 +7,8 @@ import pandas as pd
 import math
 
 # User
-from utils.exceptions import WrongInputException
-from utils.tools import break_links
+from .exceptions import WrongInputException
+from .tools import break_links
 #------------------------------------------------------------------------------
 # Non-balanced IID bootstrap
 #------------------------------------------------------------------------------

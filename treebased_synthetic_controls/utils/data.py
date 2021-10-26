@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import PolynomialFeatures
 from statsmodels.tools.tools import add_constant
-# User
 
 ###############################################################################
 # Main
