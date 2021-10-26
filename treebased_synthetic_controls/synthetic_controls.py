@@ -31,8 +31,6 @@ class SyntheticControl(BaseSyntheticControl):
                  estimator=ConstrainedOLS(),
                  param_grid={'coefs_lower_bound':0,
                              'coefs_lower_bound_constraint':">=",
-                             'coefs_upper_bound':1,
-                             'coefs_upper_bound_constraint':"<=",
                              'coefs_sum_bound':1,
                              'coefs_sum_bound_constraint':"<=",},
                  cv_params={'scoring':None,
