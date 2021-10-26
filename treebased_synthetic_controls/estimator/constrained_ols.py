@@ -63,7 +63,6 @@ class ConstrainedOLS(BaseEstimator, RegressorMixin):
         # Check that X and y have correct shape
         X, y = check_X_y(X, y)
         
-        
         if isinstance(y, pd.Series):
             self.y_name = y.name
         

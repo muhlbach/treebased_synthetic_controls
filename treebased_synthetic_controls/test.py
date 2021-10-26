@@ -19,15 +19,10 @@ import numpy as np
 import time
 
 # User
+from utils import data
 from synthetic_controls import SyntheticControl as SC
 from synthetic_controls import TreeBasedSyntheticControl as TBSC
 from synthetic_controls import ElasticNetSyntheticControl as ENSC
-
-from utils import data
-
-
-from estimator.constrained_ols import ConstrainedOLS
-
 
 #------------------------------------------------------------------------------
 # Simple example
@@ -77,13 +72,13 @@ ensc = ENSC(max_n_models=5, n_folds=1)
 
 # Fit
 sc.fit(Y=Y,W=W,X=X)
-print(f"Estimated ATE using SC: {np.around(sc.average_treatment_effet,2)}")
+print(f"Estimated ATE using SC: {np.around(sc.average_treatment_effet_,2)}")
 
 tbsc.fit(Y=Y,W=W,X=X)
-print(f"Estimated ATE using TB-SC: {np.around(tbsc.average_treatment_effet,2)}")
+print(f"Estimated ATE using TB-SC: {np.around(tbsc.average_treatment_effet_,2)}")
 
 ensc.fit(Y=Y,W=W,X=X)
-print(f"Estimated ATE using EN-SC: {np.around(ensc.average_treatment_effet,2)}")
+print(f"Estimated ATE using EN-SC: {np.around(ensc.average_treatment_effet_,2)}")
 
 # # Bootstrap
 # bootstrapped_results = tbsc.bootstrap_ate()
