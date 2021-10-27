@@ -67,8 +67,7 @@ class TreeBasedSyntheticControl(BaseSyntheticControl):
     # Constructor function
     # --------------------
     def __init__(self,
-                 estimator=RandomForestRegressor(criterion='mse',
-                                                 min_weight_fraction_leaf=0.0,
+                 estimator=RandomForestRegressor(min_weight_fraction_leaf=0.0,
                                                  min_impurity_decrease=0.0,
                                                  bootstrap=False,
                                                  oob_score=False,
@@ -124,7 +123,7 @@ class ElasticNetSyntheticControl(BaseSyntheticControl):
     def __init__(self,
                  estimator=ElasticNet(fit_intercept=True,
                                       precompute=False,
-                                      max_iter=10000,
+                                      max_iter=1000,
                                       copy_X=True,
                                       tol=0.0001,
                                       warm_start=False,
@@ -132,7 +131,7 @@ class ElasticNetSyntheticControl(BaseSyntheticControl):
                                       random_state=None,
                                       selection='cyclic'),
                  param_grid={"l1_ratio": [1/10, 1/4, 1/2, 3/4, 1],
-                             "alpha": np.exp(np.linspace(start=np.log(100), stop=np.log(0.000001), num=100)),
+                             "alpha": np.exp(np.linspace(start=np.log(100), stop=np.log(0.000001), num=1000)),
                              },
                  cv_params={'scoring':None,
                             'n_jobs':None,
