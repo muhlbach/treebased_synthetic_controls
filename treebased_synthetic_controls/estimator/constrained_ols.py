@@ -8,6 +8,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.metrics import r2_score
+from sklearn.metrics import mean_squared_error
 
 # User
 from ..utils.exceptions import WrongInputException
@@ -51,13 +52,14 @@ class ConstrainedOLS(BaseEstimator, RegressorMixin):
     SUM_CONSTRAINTS_ALLOWED = ["==", ">=", ">","<=", "<"]
 
     # --------------------
+    # Private
+    # --------------------
+    def _score(self, y_true, y_pred):
+        return mean_squared_error(y_true, y_pred)
+
+    # --------------------
     # Public functions
     # --------------------
-    # def get_params(self, deep=True):
-    #     pass
-    # def set_params(self):
-    #     pass
-
     def fit(self, X, y):
         
         # Check that X and y have correct shape
@@ -130,6 +132,9 @@ class ConstrainedOLS(BaseEstimator, RegressorMixin):
         # Beta hat
         self.beta_ = beta.value
         
+        # Return mean squared error
+        self.best_score_ = self._score(y_true=y, y_pred=X@self.beta_)
+        
         return self
         
         
@@ -149,7 +154,8 @@ class ConstrainedOLS(BaseEstimator, RegressorMixin):
         return y_hat
 
     def score(self, X, y, sample_weight=None):
-
+        # Predict
         y_pred = self.predict(X)
-        return r2_score(y, y_pred, sample_weight=sample_weight)
+        
+        return self._score(y_true=y, y_pred=y_pred)
         
