@@ -9,14 +9,8 @@ from sklearn.linear_model import ElasticNet
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, KFold, TimeSeriesSplit
 
 # User
-# from base.base_synthetic_controls import BaseSyntheticControl # ModuleNotFoundError: No module named 'base'
-from .base.base_synthetic_controls import BaseSyntheticControl # ModuleNotFoundError: No module named 'treebased_synthetic_controls.base'
-
+from .base.base_synthetic_controls import BaseSyntheticControl
 from .estimator.constrained_ols import ConstrainedOLS
-from .utils.sanity_check import check_param_grid
-from .utils.tools import SingleSplit
-from .utils.exceptions import WrongInputException
-from .utils.bootstrap import Bootstrap
 
 #------------------------------------------------------------------------------
 # Ordinary Synthetic Control Group Method

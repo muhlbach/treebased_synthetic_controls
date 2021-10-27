@@ -6,6 +6,10 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import PolynomialFeatures
 from statsmodels.tools.tools import add_constant
+from scipy.stats import norm
+
+# User
+from .exceptions import WrongInputException
 
 ###############################################################################
 # Main
@@ -40,6 +44,27 @@ def convert_to_dict_df(X=None):
     args = {k: pd.DataFrame(v, columns=get_colnames(x=v,prefix=k)) for k,v in args.items() if v is not None}
     
     return args
+
+def convert_normal_to_uniform(x, mu="infer", sigma="infer", lower_bound=0, upper_bound=1, n_digits_round=2):
+    """ See link: https://math.stackexchange.com/questions/2343952/how-to-transform-gaussiannormal-distribution-to-uniform-distribution
+    """
+    # Convert to np and break link
+    x = np.array(x.copy())   
+       
+    if mu=="infer":
+        mu = np.mean(x, axis=0).round(n_digits_round)
+    if sigma=="infer":
+        sigma = np.sqrt(np.var(x, axis=0)).round(n_digits_round)
+    
+    # Get CDF
+    x_cdf = norm.cdf(x=x, loc=mu, scale=sigma)
+    
+    # Transform
+    x_uni = (upper_bound-lower_bound)*x_cdf - lower_bound
+    
+    return x_uni
+    
+
 
 #------------------------------------------------------------------------------
 # Generate X data
@@ -82,12 +107,16 @@ def generate_ar_process(T=100, x_p=5, ar_p=3, burnin=50, **kwargs):
     # Return only the last T observations (we have removed the dependency on the initial draws)
     return X[-T:,]
 
-def generate_iid_process(T=100, x_p=5, **kwargs):
+def generate_iid_process(T=100, x_p=5, distribution="normal", **kwargs):
 
-    # Extract/generate initial coeffients of X
+    # Extract for normal
     mu = kwargs.get('mu', 0)
     sigma = kwargs.get('sigma', 1)
     covariance = kwargs.get('covariance', 0)
+
+    # Extract for uniform
+    lower_bound = kwargs.get('lower_bound', 0)
+    upper_bound = kwargs.get('upper_bound', 1)
 
     # Construct variance-covariance matrix
     cov_diag = np.diag(np.repeat(a=sigma**2, repeats=x_p))
@@ -96,10 +125,21 @@ def generate_iid_process(T=100, x_p=5, **kwargs):
     cov_mat = cov_diag + cov_off_diag
 
     # Generate X
-    X = np.random.multivariate_normal(mean=np.repeat(a=mu, repeats=x_p), 
-                                      cov=cov_mat,
-                                      size=T)    
-
+    if distribution=="normal":
+        # Draw from normal distribution
+        X = np.random.multivariate_normal(mean=np.repeat(a=mu, repeats=x_p), 
+                                          cov=cov_mat,
+                                          size=T)    
+    elif distribution=="uniform":
+        # Draw from uniform distribution
+        X = np.random.uniform(low=lower_bound,
+                              high=upper_bound,
+                              size=(T,x_p))
+    else:
+        raise WrongInputException(input_name="distribution",
+                                  provided_input=distribution,
+                                  allowed_inputs=["normal", "uniform"])
+                   
     return X
 
 def generate_errors(N=1000, p=5, mu=0, sigma=1, cov_X=0.25, cov_y=0.5):
@@ -140,13 +180,13 @@ def generate_linear_data(x, beta=1, include_intercept=True, expand=True, degree=
     x = np.array(x.copy())    
 
     if expand:
-        
+                
         # Instantiate 
         polynomialfeatures = PolynomialFeatures(degree=degree, interaction_only=interaction_only, include_bias=False, order='C')
     
         # Expand x
         x = polynomialfeatures.fit_transform(x)
-    
+            
     if include_intercept:
         x = add_constant(data=x, prepend=True, has_constant='skip')
     
@@ -155,7 +195,7 @@ def generate_linear_data(x, beta=1, include_intercept=True, expand=True, degree=
     
     # Make sure beta has the right dimensions
     beta = beta.reshape(-1,1)
-    
+        
     if x.shape[1]!=beta.shape[0]:
         raise Exception(f"Beta is {beta.shape}-dim vector, but X is {x.shape}-dim matrix")
 
@@ -173,6 +213,10 @@ def generate_friedman_data_1(x, **kwargs):
     # Convert to np and break link
     x = np.array(x.copy())    
 
+    # Sanity check
+    if x.shape[1]<5:
+        raise Exception(f"Friedman 1 requires at least 5 regresors, but only {x.shape[1]} are provided in x")
+
     # Generate fstar=E[y|X=x]
     f_star = 0.1*np.exp(4*x[:,0]) + 4/(1+np.exp(-20*(x[:,1]-0.5))) + 3*x[:,2] + 2*x[:,3] + 1*x[:,4]
     
@@ -185,6 +229,10 @@ def generate_friedman_data_2(x, **kwargs):
     
     # Convert to np and break link
     x = np.array(x.copy())    
+
+    # Sanity check
+    if x.shape[1]<5:
+        raise Exception(f"Friedman 2 requires at least 5 regresors, but only {x.shape[1]} are provided in x")
 
     # Generate fstar=E[y|X=x]
     f_star = 10*np.sin(np.pi*x[:,0]*x[:,1]) + 20*(x[:,2]-0.5)**2 + 10*x[:,3] + 5*x[:,4]
@@ -201,6 +249,7 @@ def simulate_data(f,
                   T0=500,
                   T1=50,
                   X_type="AR",
+                  X_dist="normal",
                   X_dim=5,
                   AR_lags=3,
                   ate=1,
@@ -224,17 +273,13 @@ def simulate_data(f,
                                 errors=errors)
                 
     elif X_type=="iid":
-        X = generate_iid_process(T=T,x_p=X_dim)
+        X = generate_iid_process(T=T,x_p=X_dim,distribution=X_dist, **kwargs)
     
     # Generate W
     W = np.repeat((0,1), (T0,T1))
 
     # Generate Y
     Y = f(x=X, **kwargs) + ate*W + errors[:,-1]
-
-    # df = {"Y":Y,
-    #       "W":W,
-    #       "X":X}
 
     # Collect data
     df = pd.concat(objs=[pd.Series(data=Y,name="Y"),
