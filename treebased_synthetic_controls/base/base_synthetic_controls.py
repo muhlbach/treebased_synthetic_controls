@@ -26,7 +26,7 @@ class BaseSyntheticControl(object):
     def __init__(self,
                  estimator,
                  param_grid,
-                 cv_params={'scoring':None,
+                 cv_params={'scoring':"neg_mean_squared_error", #default: None
                             'n_jobs':None,
                             'refit':True,
                             'verbose':0,
@@ -161,7 +161,10 @@ class BaseSyntheticControl(object):
                 
         # Estimate f in Y0 = f(X) + eps
         self.estimator_cv.fit(X=self.X_pre,y=self.Y_pre)
-                
+        
+        # Mean cross-validated score of the best_estimator
+        self.mean_best_score_ = self.estimator_cv.best_score_
+        
         # Predict Y0 post-treatment
         self.Y_post_hat = self.estimator_cv.predict(X=self.X_post)
         
