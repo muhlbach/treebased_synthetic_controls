@@ -192,13 +192,19 @@ def generate_linear_data(x, beta=1, include_intercept=True, expand=True, degree=
     
     if isinstance(beta, int) or isinstance(beta, float):
         beta = np.repeat(a=beta, repeats=x.shape[1])
+    elif isinstance(beta, np.ndarray):
+        if len(beta)<x.shape[1]:
+            beta = np.tile(A=beta, reps=int(np.ceil(x.shape[1]/2)))
+            
+        # Shorten potentially
+        beta = beta[:x.shape[1]]
     elif isinstance(beta, str):
         if beta=="uniform":
             beta = np.repeat(a=1/x.shape[1], repeats=x.shape[1])
     else:
         raise WrongInputException(input_name="beta",
                                   provided_input=beta,
-                                  allowed_inputs=[int, float, "uniform"])        
+                                  allowed_inputs=[int, float, np.ndarray, "uniform"])        
                 
     # Make sure beta has the right dimensions
     beta = beta.reshape(-1,1)
