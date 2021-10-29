@@ -4,6 +4,7 @@
 # Standard
 import numpy as np
 import pandas as pd
+import cvxpy as cp
 from sklearn.preprocessing import PolynomialFeatures
 from statsmodels.tools.tools import add_constant
 from scipy.stats import norm
@@ -174,26 +175,38 @@ def generate_errors(N=1000, p=5, mu=0, sigma=1, cov_X=0.25, cov_y=0.5):
 #------------------------------------------------------------------------------
 # Generate f_star = E[Y|X=x]
 #------------------------------------------------------------------------------
-def generate_linear_data(x, beta=1, include_intercept=True, expand=True, degree=2, interaction_only=True, enforce_limits=False, **kwargs):
-
-    # Convert to np and break link
-    x = np.array(x.copy())    
-
-    if enforce_limits:
-        x_min, x_max  = np.min(x, axis=1), np.max(x, axis=1)
-
-    if expand:
-                
-        # Instantiate 
-        polynomialfeatures = PolynomialFeatures(degree=degree, interaction_only=interaction_only, include_bias=False, order='C')
+def _solve_meta_problem(A,B,w):
+    """
+    Solve diag(X @ A') = B @ w for X such that X_ij>=0 and sum_j(X_ij)==1 for all i
+    """
+    # Vectorize weights
+    w = _vectorize_beta(beta=w,x=B)
     
-        # Expand x
-        x = polynomialfeatures.fit_transform(x)
-            
-    if include_intercept:
-        x = add_constant(data=x, prepend=True, has_constant='skip')
+    # Set up variable to solve for
+    X = cp.Variable(shape=(A.shape))
+        
+    # Set up constraints
+    constraints = [X >= 0,
+                   X @ np.ones(shape=(A.shape[1],)) == 1
+                   ]
+    
+    # Set up objective function
+    objective = cp.Minimize(cp.sum_squares(cp.diag(X @ A.T) - B @ w))
+    
+    # Instantiate
+    problem = cp.Problem(objective=objective, constraints=constraints)
+    
+    # Solve (No need to specify solver because by default CVXPY calls the solver most specialized to the problem type)
+    problem.solve(verbose=False)
+    
+    return X.value
+    
+def _vectorize_beta(beta,x):
+    """
+    Turn supplied beta into an appropriate shape
+    """
     if isinstance(beta, int) or isinstance(beta, float):
-        beta = np.repeat(a=beta, repeats=x.shape[1])
+        beta = np.repeat(a=beta, repeats=x.shape[1])        
     elif isinstance(beta, np.ndarray):
         if len(beta)<x.shape[1]:
             beta = np.tile(A=beta, reps=int(np.ceil(x.shape[1]/len(beta))))
@@ -202,19 +215,65 @@ def generate_linear_data(x, beta=1, include_intercept=True, expand=True, degree=
     elif isinstance(beta, str):
         if beta=="uniform":
             beta = np.repeat(a=1/x.shape[1], repeats=x.shape[1])
+        elif beta=="flip_uniform":
+            beta = np.repeat(a=1/x.shape[1], repeats=x.shape[1])            
     else:
         raise WrongInputException(input_name="beta",
                                   provided_input=beta,
-                                  allowed_inputs=[int, float, np.ndarray, "uniform"])        
-                
-    # Make sure beta has the right dimensions
-    beta = beta.reshape(-1,1)
+                                  allowed_inputs=[int, float, str, np.ndarray])       
         
+    # Make sure beta has the right dimensions
+    beta = beta.reshape(-1,)        
+    
     if x.shape[1]!=beta.shape[0]:
-        raise Exception(f"Beta is {beta.shape}-dim vector, but X is {x.shape}-dim matrix")
+            raise Exception(f"Beta is {beta.shape}-dim vector, but X is {x.shape}-dim matrix")
+    
+    return beta
+    
 
-    # Generate fstar=E[y|X=x]
-    f_star = x @ beta
+def generate_linear_data(x, beta=1, include_intercept=False, expand=False, degree=2, interaction_only=True, enforce_limits=False, enforce_trickiness=False, tol_tricky=100, **kwargs):
+
+    # Convert to np and break link
+    x = np.array(x.copy())    
+
+    if enforce_limits:
+        x_min, x_max  = np.min(x, axis=1), np.max(x, axis=1)
+
+    if expand:        
+        # Instantiate 
+        polynomialfeatures = PolynomialFeatures(degree=degree, interaction_only=interaction_only, include_bias=False, order='C')
+    
+        # Expand x
+        x_poly = polynomialfeatures.fit_transform(x)[:,x.shape[1]:]
+        
+        # Concatenate
+        x_all = np.concatenate((x,x_poly), axis=1)
+        
+    else:
+        x_all = x
+        
+    if include_intercept:
+        x = add_constant(data=x, prepend=True, has_constant='skip')
+        
+    if enforce_trickiness:
+
+        # Get tricky weight matrix
+        weights = _solve_meta_problem(A=x, B=x_all, w="uniform")        
+
+        # Generate fstar=E[y|X=x]
+        f_star = np.diagonal(weights @ x.T)
+        
+        f_star_check = x_all @ _vectorize_beta(beta="uniform",x=x_all)
+
+        if np.sum(f_star-f_star_check) > tol_tricky:
+            raise Exception("Trickiness didn't work as differences are above tolerance")
+        
+    else:
+        # Make beta a conformable vector
+        beta = _vectorize_beta(beta=beta,x=x)
+                
+        # Generate fstar=E[y|X=x]
+        f_star = x @ beta
     
     # Reshape for conformity
     f_star = f_star.reshape(-1,)

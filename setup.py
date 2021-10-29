@@ -26,7 +26,7 @@ AUTHOR_EMAIL = 'n.muhlbach@gmail.com'
 
 #
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.1.9'
+VERSION = '0.1.10'
 
 # What packages are required for this module to be executed?
 INSTALL_REQUIRES = [
