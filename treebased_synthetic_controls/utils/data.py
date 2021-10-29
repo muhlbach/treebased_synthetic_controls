@@ -196,7 +196,7 @@ def generate_linear_data(x, beta=1, include_intercept=True, expand=True, degree=
         beta = np.repeat(a=beta, repeats=x.shape[1])
     elif isinstance(beta, np.ndarray):
         if len(beta)<x.shape[1]:
-            beta = np.tile(A=beta, reps=int(np.ceil(x.shape[1]/2)))
+            beta = np.tile(A=beta, reps=int(np.ceil(x.shape[1]/len(beta))))
         # Shorten potentially
         beta = beta[:x.shape[1]]
     elif isinstance(beta, str):
