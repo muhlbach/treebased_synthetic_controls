@@ -174,10 +174,13 @@ def generate_errors(N=1000, p=5, mu=0, sigma=1, cov_X=0.25, cov_y=0.5):
 #------------------------------------------------------------------------------
 # Generate f_star = E[Y|X=x]
 #------------------------------------------------------------------------------
-def generate_linear_data(x, beta=1, include_intercept=True, expand=True, degree=2, interaction_only=True, **kwargs):
+def generate_linear_data(x, beta=1, include_intercept=True, expand=True, degree=2, interaction_only=True, enforce_limits=False, **kwargs):
 
     # Convert to np and break link
     x = np.array(x.copy())    
+
+    if enforce_limits:
+        x_min, x_max  = np.min(x, axis=1), np.max(x, axis=1)
 
     if expand:
                 
@@ -189,13 +192,11 @@ def generate_linear_data(x, beta=1, include_intercept=True, expand=True, degree=
             
     if include_intercept:
         x = add_constant(data=x, prepend=True, has_constant='skip')
-    
     if isinstance(beta, int) or isinstance(beta, float):
         beta = np.repeat(a=beta, repeats=x.shape[1])
     elif isinstance(beta, np.ndarray):
         if len(beta)<x.shape[1]:
             beta = np.tile(A=beta, reps=int(np.ceil(x.shape[1]/2)))
-            
         # Shorten potentially
         beta = beta[:x.shape[1]]
     elif isinstance(beta, str):
@@ -217,6 +218,10 @@ def generate_linear_data(x, beta=1, include_intercept=True, expand=True, degree=
     
     # Reshape for conformity
     f_star = f_star.reshape(-1,)
+    
+    if enforce_limits:
+        f_star = np.where(f_star<x_min, x_min, f_star)
+        f_star = np.where(f_star>x_max, x_max, f_star)
     
     return f_star
     
