@@ -132,8 +132,8 @@ class ConstrainedOLS(BaseEstimator, RegressorMixin):
         # Instantiate
         problem = cp.Problem(objective=objective, constraints=constraints)
         
-        # Solve
-        problem.solve(solver=cp.SCS, verbose=self.verbose)
+        # Solve (No need to specify solver because by default CVXPY calls the solver most specialized to the problem type)
+        problem.solve(verbose=self.verbose)
         
         # Beta hat
         self.beta_ = beta.value
