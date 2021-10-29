@@ -21,6 +21,9 @@ from ..utils.exceptions import WrongInputException
 # Constrained OLS
 #------------------------------------------------------------------------------
 class ConstrainedOLS(BaseEstimator, RegressorMixin):
+    """
+    Read about solvers: https://www.cvxpy.org/tutorial/advanced/index.html?highlight=scs#choosing-a-solver
+    """
     # --------------------
     # Constructor function
     # --------------------
@@ -126,14 +129,20 @@ class ConstrainedOLS(BaseEstimator, RegressorMixin):
         # Set up ojective function
         objective = cp.Minimize(cp.sum_squares(y - X @ beta))
         
-        # Instantiate and solve
-        optim_problem = cp.Problem(objective=objective, constraints=constraints).solve(verbose=self.verbose)
+        # Instantiate
+        problem = cp.Problem(objective=objective, constraints=constraints)
+        
+        # Solve
+        problem.solve(solver=cp.SCS, verbose=self.verbose)
         
         # Beta hat
         self.beta_ = beta.value
         
+        # Fitted valued
+        self.y_fitted_ = X @ self.beta_
+
         # Return mean squared error
-        self.best_score_ = self._score(y_true=y, y_pred=X@self.beta_)
+        self.best_score_ = self._score(y_true=y, y_pred=self.y_fitted_)
         
         return self
         
