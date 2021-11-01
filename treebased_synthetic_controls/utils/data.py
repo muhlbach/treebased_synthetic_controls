@@ -205,7 +205,7 @@ def _vectorize_beta(beta,x):
     """
     Turn supplied beta into an appropriate shape
     """
-    if isinstance(beta, int) or isinstance(beta, float):
+    if isinstance(beta, (int, float, np.integer)):
         beta = np.repeat(a=beta, repeats=x.shape[1])        
     elif isinstance(beta, np.ndarray):
         if len(beta)<x.shape[1]:
@@ -220,7 +220,7 @@ def _vectorize_beta(beta,x):
     else:
         raise WrongInputException(input_name="beta",
                                   provided_input=beta,
-                                  allowed_inputs=[int, float, str, np.ndarray])       
+                                  allowed_inputs=[int, float, str, np.ndarray, np.integer])       
         
     # Make sure beta has the right dimensions
     beta = beta.reshape(-1,)        
@@ -229,17 +229,34 @@ def _vectorize_beta(beta,x):
             raise Exception(f"Beta is {beta.shape}-dim vector, but X is {x.shape}-dim matrix")
     
     return beta
+
+
+def generate_linear_data(x,
+                         beta=1,
+                         beta_handling="default",
+                         include_intercept=False,
+                         expand=False,
+                         degree=2,
+                         interaction_only=False,
+                         enforce_limits=False,
+                         tol_fstar=100,
+                         **kwargs):
+
+    #
+    BETA_HANDLING_ALLOWED = ["default", "structural", "split_order"]
     
-
-def generate_linear_data(x, beta=1, include_intercept=False, expand=False, degree=2, interaction_only=True, enforce_limits=False, enforce_trickiness=False, tol_tricky=100, **kwargs):
-
     # Convert to np and break link
     x = np.array(x.copy())    
 
+    # Convert extrama points of X
     if enforce_limits:
         x_min, x_max  = np.min(x, axis=1), np.max(x, axis=1)
 
+    # Series expansion of X
     if expand:        
+        if degree<2:
+            raise Exception(f"When polynomial features are generated (expand=True), 'degree' must be >=2. It is curently {degree}")
+        
         # Instantiate 
         polynomialfeatures = PolynomialFeatures(degree=degree, interaction_only=interaction_only, include_bias=False, order='C')
     
@@ -252,29 +269,75 @@ def generate_linear_data(x, beta=1, include_intercept=False, expand=False, degre
     else:
         x_all = x
         
+    # Include a constant in X
     if include_intercept:
         x = add_constant(data=x, prepend=True, has_constant='skip')
         
-    if enforce_trickiness:
+    # Different ways to generating beta and fstar
+    if beta_handling=="default":
+        print("default")
+        # Make beta a conformable vector
+        beta = _vectorize_beta(beta=beta,x=x_all)
+                
+        # Generate fstar=E[y|X=x]
+        f_star = x_all @ beta
 
-        # Get tricky weight matrix
+    elif beta_handling=="structural":
+        print("structual")
+        # Get tricky weight matrix, solving diag(WX')=X_all*beta_uniform
         weights = _solve_meta_problem(A=x, B=x_all, w="uniform")        
 
         # Generate fstar=E[y|X=x]
         f_star = np.diagonal(weights @ x.T)
         
+        # Fact check this
         f_star_check = x_all @ _vectorize_beta(beta="uniform",x=x_all)
 
-        if np.sum(f_star-f_star_check) > tol_tricky:
-            raise Exception("Trickiness didn't work as differences are above tolerance")
+        if np.sum(f_star-f_star_check) > tol_fstar:
+            raise Exception("Trickiness didn't work as differences are above tolerance")        
+        
+    elif beta_handling=="split_order":    
+
+        if isinstance(beta, (int, float, str, np.integer)):
+            raise Exception("Whenever 'beta_handling'='split_order', then 'beta' cannot be either (int, float, str)")
+        elif len(beta)!=degree:
+            raise Exception(f"beta is if length {len(beta)}, but MUST be of length {degree}")
+        if not expand:
+            raise Exception("Whenever 'beta_handling'='split_order', then 'expand' must be True")
+        
+        # First-order beta
+        beta_first_order = _vectorize_beta(beta=beta[0],x=x)
+        
+        # Higher-order beta
+        beta_higher_order = np.empty(shape=(0,))
+
+        # Initialize
+        higher_order_col = 0
+        for higher_order in range(2,degree+1):
+
+            # Instantiate 
+            poly_temp = PolynomialFeatures(degree=higher_order, interaction_only=interaction_only, include_bias=False, order='C')
+    
+            # Expand x
+            x_poly_temp = poly_temp.fit_transform(x)[:,x.shape[1]+higher_order_col:]
+
+            # Generate temporary betas for this degree of the expansion
+            beta_higher_order_temp = _vectorize_beta(beta=beta[higher_order-1],x=x_poly_temp)
+                
+            # Append betas
+            beta_higher_order = np.append(arr=beta_higher_order, values=beta_higher_order_temp)
+        
+            # Add column counter that governs which columns to match in X
+            higher_order_col += x_poly_temp.shape[1]
+        
+        # Generate fstar=E[y|X=x]
+        f_star = x @ beta_first_order + x_poly @ beta_higher_order
         
     else:
-        # Make beta a conformable vector
-        beta = _vectorize_beta(beta=beta,x=x)
-                
-        # Generate fstar=E[y|X=x]
-        f_star = x @ beta
-    
+        raise WrongInputException(input_name="beta_handling",
+                                  provided_input=beta_handling,
+                                  allowed_inputs=BETA_HANDLING_ALLOWED)  
+        
     # Reshape for conformity
     f_star = f_star.reshape(-1,)
     
