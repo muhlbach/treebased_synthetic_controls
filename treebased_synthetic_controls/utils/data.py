@@ -275,7 +275,6 @@ def generate_linear_data(x,
         
     # Different ways to generating beta and fstar
     if beta_handling=="default":
-        print("default")
         # Make beta a conformable vector
         beta = _vectorize_beta(beta=beta,x=x_all)
                 
@@ -283,7 +282,6 @@ def generate_linear_data(x,
         f_star = x_all @ beta
 
     elif beta_handling=="structural":
-        print("structual")
         # Get tricky weight matrix, solving diag(WX')=X_all*beta_uniform
         weights = _solve_meta_problem(A=x, B=x_all, w="uniform")        
 
